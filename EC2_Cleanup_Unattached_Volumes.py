@@ -43,7 +43,7 @@ def main(dryrun, sendit):
 
 def take_snapshot(vid, ec2_client, f):
     try:
-        f.write(f"Taking snapshot for volume: {vid}")
+        f.write(f"Taking snapshot for volume: {vid}\n")
         snapshot = ec2_client.create_snapshot(
             Description=f'Automated Snapshot of unattached volume for AWS Cleanup',
             VolumeId=vid
