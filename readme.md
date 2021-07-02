@@ -3,6 +3,8 @@
 
 This repo houses the many aws scripts I've written over time.
 
+Created with [readme.so](https://readme.so).
+
 
 ## License
 
