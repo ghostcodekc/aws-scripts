@@ -10,6 +10,12 @@ consoleSignInFalureAlarmName = ''
 cloudTrailChangesAlarmName = ''
 iamPolicyChangesAlarmName = ''
 authorizationFailuresAlarmName = ''
+ec2InstanceChangesAlarmName = ''
+gatewayChangesAlarmName = ''
+ec2LargeInstanceChangesAlarmName = ''
+networkACLChangesAlarmName = ''
+securityGroupChangesAlarmName = ''
+vpcChangesAlarmName = ''
 
 ################## CHANGE VALUES ABOVE TO MATCH YOUR ENVIRONMENT ##################
 
@@ -23,19 +29,23 @@ start_time_hour = start_time.strftime("%H")
 start_time_string = f"{start_time.year}-{start_time_month}-{start_time_day}T{start_time_hour}:{start_time_minute}:00Z"
 
 def create_authorization_failures_query(time_now_string, table_name):
-    query = f'''SELECT useridentity.username as username, eventname, eventtime as date, errormessage FROM "default"."{table_name}" WHERE "eventname" LIKE 'UnauthorizedOperation' OR "errorcode" LIKE 'AccessDenied' AND "eventtime" BETWEEN '{start_time_string}' AND '{time_now_string}' '''
+    query = f'''SELECT useridentity.arn as username, eventname, eventtime as date, errormessage FROM "default"."{table_name}" WHERE "eventname" LIKE 'UnauthorizedOperation' OR "errorcode" LIKE 'AccessDenied' AND "eventtime" BETWEEN '{start_time_string}' AND '{time_now_string}' '''
     return query
 
 def create_console_sign_in_failure_query(time_now_string, table_name):
-    query = f'''SELECT useridentity.username as username, eventname, eventtime as date, errormessage FROM "default"."{table_name}" WHERE "eventname" LIKE 'ConsoleLogin' AND "errormessage" LIKE 'Failed authentication' AND "eventtime" between '{start_time_string}' and '{time_now_string}' '''
+    query = f'''SELECT useridentity.arn as username, eventname, eventtime as date, errormessage FROM "default"."{table_name}" WHERE "eventname" LIKE 'ConsoleLogin' AND "errormessage" LIKE 'Failed authentication' AND "eventtime" between '{start_time_string}' and '{time_now_string}' '''
     return query
 
 def create_iam_policy_changes_query(time_now_string, table_name):
-    query = f'''SELECT useridentity.username as username, eventname, eventtime as date, requestparameters FROM "default"."{table_name}" WHERE "eventname" LIKE 'DeleteGroupPolicy' OR "eventname" LIKE 'DeleteRolePolicy' OR "eventname" LIKE 'DeleteUserPolicy' OR "eventname" LIKE 'PutGroupPolicy' OR "eventname" LIKE 'PutRolePolicy' OR "eventname" LIKE 'PutUserPolicy' OR "eventname" LIKE 'CreatePolicy' OR "eventname" LIKE 'DeletePolicy' OR "eventname" LIKE 'CreatePolicyVersion' OR "eventname" LIKE 'DeletePolicyVersion' OR "eventname" LIKE 'AttachRolePolicy' OR "eventname" LIKE 'DetachRolePolicy' OR "eventname" LIKE 'AttachUserPolicy' OR "eventname" LIKE 'DetachUserPolicy' OR "eventname" LIKE 'AttachGroupPolicy' OR "eventname" LIKE 'DetachGroupPolicy' AND "eventtime" BETWEEN '{start_time_string}' AND '{time_now_string}' '''
+    query = f'''SELECT useridentity.arn as username, eventname, eventtime as date, requestparameters FROM "default"."{table_name}" WHERE "eventname" LIKE 'DeleteGroupPolicy' OR "eventname" LIKE 'DeleteRolePolicy' OR "eventname" LIKE 'DeleteUserPolicy' OR "eventname" LIKE 'PutGroupPolicy' OR "eventname" LIKE 'PutRolePolicy' OR "eventname" LIKE 'PutUserPolicy' OR "eventname" LIKE 'CreatePolicy' OR "eventname" LIKE 'DeletePolicy' OR "eventname" LIKE 'CreatePolicyVersion' OR "eventname" LIKE 'DeletePolicyVersion' OR "eventname" LIKE 'AttachRolePolicy' OR "eventname" LIKE 'DetachRolePolicy' OR "eventname" LIKE 'AttachUserPolicy' OR "eventname" LIKE 'DetachUserPolicy' OR "eventname" LIKE 'AttachGroupPolicy' OR "eventname" LIKE 'DetachGroupPolicy' AND "eventtime" BETWEEN '{start_time_string}' AND '{time_now_string}' '''
     return query
 
 def create_cloud_trail_changes_query(time_now_string, table_name):
-    query = f'''SELECT useridentity.username as username, eventname, eventtime as date, errormessage FROM "default"."{table_name}" WHERE "eventname" LIKE 'CreateTrail' OR "eventname" LIKE 'DeleteTrail' OR "eventname" LIKE 'StartLogging' OR "eventname" LIKE 'StopLogging' AND "eventtime" BETWEEN '{start_time_string}' AND '{time_now_string}' '''
+    query = f'''SELECT useridentity.arn as username, eventname, eventtime as date, errormessage FROM "default"."{table_name}" WHERE "eventname" LIKE 'CreateTrail' OR "eventname" LIKE 'DeleteTrail' OR "eventname" LIKE 'StartLogging' OR "eventname" LIKE 'StopLogging' AND "eventtime" BETWEEN '{start_time_string}' AND '{time_now_string}' '''
+    return query
+
+def create_vpc_changes_query(time_now_string, table_name):
+    query = f'''SELECT useridentity.arn as username, eventname, eventtime as date, requestparameters FROM "default"."{table_name}" WHERE "eventname" LIKE 'CreateVpc' OR "eventname" LIKE 'DeleteVpc' OR "eventname" LIKE 'ModifyVpcAttribute' OR "eventname" LIKE 'AcceptVpcPeeringConnection' OR "eventname" LIKE 'CreateVpcPeeringConnection' OR "eventname" LIKE 'DeleteVpcPeeringConnection' OR "eventname" LIKE 'RejectVpcPeeringConnection' OR "eventname" LIKE 'AttachClassicLinkVpc' OR "eventname" LIKE 'DetachClassicLinkVpc' OR "eventname" LIKE 'DisableVpcClassicLink' OR "eventname" LIKE 'EnableVpcClassicLink' AND "eventtime" BETWEEN '{start_time_string}' AND '{time_now_string}' '''
     return query
 
 def getProperQuery(event, time_now_string, table_name):
@@ -53,6 +63,9 @@ def getProperQuery(event, time_now_string, table_name):
         return query, alarmName
     if alarmName == authorizationFailuresAlarmName:
         query = create_authorization_failures_query(time_now_string, table_name)
+        return query, alarmName
+    if alarmName == vpcChangesAlarmName:
+        query = create_vpc_changes_query(time_now_string, table_name)
         return query, alarmName
 
 def athenaParsing(event, table_name):
@@ -204,10 +217,14 @@ def sendToSlack(data, alarmName):
     for alarm in data:
         print(alarm['Data'])
         userName = alarm['Data'][0]['VarCharValue']
+        print(f'userName Value: {userName}')
+        userName = userName.replace('arn:aws:sts::', '')
+        userName = userName.replace('arn:aws:iam::', '')
+        userName = userName[13:]
         eventName = alarm['Data'][1]['VarCharValue']
         alarmTime = alarm['Data'][2]['VarCharValue']
         additionalDetails = alarm['Data'][3]['VarCharValue']
-        message = f"Alarm: {alarmName}\nBlame: {userName}\nTime: {alarmTime}\nEvent Name: {eventName}\nAdditional Information: {additionalDetails}"
+        message = f"####################################\nAlarm: {alarmName}\nBlame: {userName}\nTime: {alarmTime}\nEvent Name: {eventName}\nAdditional Information: {additionalDetails}\n####################################"
         print(message)
         slack_data = {'text': message}
         print(slack_data)
